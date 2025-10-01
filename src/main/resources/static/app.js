@@ -190,6 +190,13 @@ class ExpenseTrackerApp {
                     const message = (data && data.message) || `Request failed with status ${response.status}`;
                     const retryableStatus = [404, 502, 503, 504].includes(response.status);
 
+                    if ([401, 403].includes(response.status)) {
+                        console.warn('[ExpenseTracker] Authentication failed. Clearing stored token.');
+                        this._handleLogout();
+                        this._displayMessage(this.errorMessage, 'Session expired. Please log in again.');
+                        throw new Error(message);
+                    }
+
                     if (retryableStatus && i < this.apiBaseUrls.length - 1) {
                         console.warn(`[ExpenseTracker] ${response.status} from ${baseUrl}${endpoint}. Trying next API base...`);
                         continue;

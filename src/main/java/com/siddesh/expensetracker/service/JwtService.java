@@ -1,24 +1,32 @@
 package com.siddesh.expensetracker.service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Service;
-
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret-key}")
+    private static final Logger LOGGER = LoggerFactory.getLogger(JwtService.class);
+
+    @Value("${jwt.secret-key:${JWT_SECRET_KEY:}}")
     private String secretKey;
 
     public String extractUsername(String token) {
@@ -68,7 +76,37 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException("JWT secret key is not configured. Set jwt.secret-key or JWT_SECRET_KEY environment variable.");
+        }
+
+        byte[] keyBytes = tryDecodeBase64(secretKey.trim());
+
+        if (keyBytes == null) {
+            LOGGER.warn("JWT secret key is not Base64 encoded. Deriving a secure key from the provided value.");
+            keyBytes = deriveKeyFromPlainText(secretKey);
+        } else if (keyBytes.length < 32) {
+            LOGGER.warn("JWT secret key is shorter than 256 bits. Deriving a secure key from the provided value.");
+            keyBytes = deriveKeyFromPlainText(secretKey);
+        }
+
         return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    private byte[] tryDecodeBase64(String value) {
+        try {
+            return Decoders.BASE64.decode(value);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private byte[] deriveKeyFromPlainText(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return digest.digest(value.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available in this environment", e);
+        }
     }
 }
