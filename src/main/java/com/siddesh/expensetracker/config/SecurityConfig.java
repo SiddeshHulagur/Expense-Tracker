@@ -35,10 +35,19 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .anyRequest().authenticated()
-                )
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers(
+                "/",
+                "/index.html",
+                "/static/**",
+                "/app.js",
+                "/style.css",
+                "/favicon.ico",
+                "/assets/**",
+                "/api/auth/**"
+            ).permitAll()
+            .anyRequest().authenticated()
+        )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
@@ -49,7 +58,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // <<< THE FIX IS HERE: Added your frontend's address
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5500", "http://127.0.0.1:5500", "http://127.0.0.1:3000"));
+    configuration.setAllowedOrigins(Arrays.asList(
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://127.0.0.1:3000",
+        "http://localhost:8090",
+        "https://expense-tracker-ky5w.onrender.com"
+    ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
@@ -63,6 +78,7 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    @SuppressWarnings("deprecation")
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
