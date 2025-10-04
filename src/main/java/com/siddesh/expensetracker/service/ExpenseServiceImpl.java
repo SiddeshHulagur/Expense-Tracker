@@ -1,64 +1,101 @@
 package com.siddesh.expensetracker.service;
 
-import com.siddesh.expensetracker.entity.Expense;
-import com.siddesh.expensetracker.entity.User;
-import com.siddesh.expensetracker.repository.ExpenseRepository;
-import com.siddesh.expensetracker.repository.UserRepository;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Optional;
 
-@Service // Marks this class as a Spring Service component
+import org.springframework.stereotype.Service;
+
+import com.siddesh.expensetracker.entity.Expense;
+import com.siddesh.expensetracker.entity.User;
+import com.siddesh.expensetracker.mongo.document.ExpenseDocument;
+import com.siddesh.expensetracker.mongo.repository.ExpenseDocumentRepository;
+import com.siddesh.expensetracker.mongo.service.SequenceGeneratorService;
+import com.siddesh.expensetracker.repository.UserRepository;
+
+@Service
 public class ExpenseServiceImpl implements ExpenseService {
 
-    private final ExpenseRepository expenseRepository;
-    private final UserRepository userRepository;
+    private static final String EXPENSE_SEQUENCE = "expense_sequence";
 
-    // Constructor-based dependency injection (preferred method)
-    public ExpenseServiceImpl(ExpenseRepository expenseRepository, UserRepository userRepository) {
-        this.expenseRepository = expenseRepository;
+    private final ExpenseDocumentRepository expenseDocumentRepository;
+    private final UserRepository userRepository;
+    private final SequenceGeneratorService sequenceGeneratorService;
+
+    public ExpenseServiceImpl(ExpenseDocumentRepository expenseDocumentRepository,
+                              UserRepository userRepository,
+                              SequenceGeneratorService sequenceGeneratorService) {
+        this.expenseDocumentRepository = expenseDocumentRepository;
         this.userRepository = userRepository;
+        this.sequenceGeneratorService = sequenceGeneratorService;
     }
 
     @Override
     public List<Expense> getAllExpensesByUserId(Long userId) {
-        return expenseRepository.findByUserId(userId);
+        User user = getUserOrThrow(userId);
+        return expenseDocumentRepository.findByUserId(userId)
+                .stream()
+                .map(document -> toExpense(document, user))
+                .toList();
     }
 
     @Override
     public Optional<Expense> getExpenseByIdAndUserId(Long id, Long userId) {
-        return expenseRepository.findById(id)
-                .filter(expense -> expense.getUser().getId().equals(userId));
+        User user = getUserOrThrow(userId);
+        return expenseDocumentRepository.findByExpenseIdAndUserId(id, userId)
+                .map(document -> toExpense(document, user));
     }
 
     @Override
     public Expense createExpense(Expense expense, Long userId) {
-        // Find the user by ID, or throw an exception if not found
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
-        // Associate the expense with the user
-        expense.setUser(user);
-        return expenseRepository.save(expense);
+        User user = getUserOrThrow(userId);
+        long nextId = sequenceGeneratorService.getNextSequence(EXPENSE_SEQUENCE);
+
+        ExpenseDocument document = ExpenseDocument.builder()
+                .expenseId(nextId)
+                .userId(userId)
+                .description(expense.getDescription())
+                .amount(expense.getAmount())
+                .date(expense.getDate())
+                .category(expense.getCategory())
+                .build();
+
+        ExpenseDocument saved = expenseDocumentRepository.save(document);
+        return toExpense(saved, user);
     }
 
     @Override
     public Optional<Expense> updateExpense(Long id, Expense expenseDetails, Long userId) {
-        return expenseRepository.findById(id)
-                .filter(expense -> expense.getUser().getId().equals(userId)) // Ensure the expense belongs to the user
-                .map(expense -> {
-                    expense.setDescription(expenseDetails.getDescription());
-                    expense.setAmount(expenseDetails.getAmount());
-                    expense.setDate(expenseDetails.getDate());
-                    expense.setCategory(expenseDetails.getCategory());
-                    return expenseRepository.save(expense);
+        User user = getUserOrThrow(userId);
+        return expenseDocumentRepository.findByExpenseIdAndUserId(id, userId)
+                .map(document -> {
+                    document.setDescription(expenseDetails.getDescription());
+                    document.setAmount(expenseDetails.getAmount());
+                    document.setDate(expenseDetails.getDate());
+                    document.setCategory(expenseDetails.getCategory());
+                    ExpenseDocument saved = expenseDocumentRepository.save(document);
+                    return toExpense(saved, user);
                 });
     }
 
     @Override
     public void deleteExpense(Long id, Long userId) {
-        expenseRepository.findById(id)
-                .filter(expense -> expense.getUser().getId().equals(userId)) // Ensure the expense belongs to the user
-                .ifPresent(expenseRepository::delete); // If it exists and belongs to the user, delete it
+        expenseDocumentRepository.findByExpenseIdAndUserId(id, userId)
+                .ifPresent(expenseDocumentRepository::delete);
+    }
+
+    private Expense toExpense(ExpenseDocument document, User user) {
+        return new Expense(
+                document.getExpenseId(),
+                document.getDescription(),
+                document.getAmount(),
+                document.getDate(),
+                document.getCategory(),
+                user
+        );
+    }
+
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
     }
 }

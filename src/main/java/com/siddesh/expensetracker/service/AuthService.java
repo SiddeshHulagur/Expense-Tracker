@@ -1,38 +1,46 @@
 package com.siddesh.expensetracker.service;
 
-import com.siddesh.expensetracker.dto.AuthResponse;
-import com.siddesh.expensetracker.dto.LoginRequest;
-import com.siddesh.expensetracker.dto.RegisterRequest;
-import com.siddesh.expensetracker.entity.User;
-import com.siddesh.expensetracker.repository.UserRepository;
+import java.util.Collections;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
+import com.siddesh.expensetracker.dto.AuthResponse;
+import com.siddesh.expensetracker.dto.LoginRequest;
+import com.siddesh.expensetracker.dto.RegisterRequest;
+import com.siddesh.expensetracker.entity.User;
+import com.siddesh.expensetracker.mongo.service.SequenceGeneratorService;
+import com.siddesh.expensetracker.repository.UserRepository;
 
 @Service
 public class AuthService {
+
+    private static final String USER_SEQUENCE = "user_sequence";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    // We have removed UserDetailsServiceImpl from here
+    private final SequenceGeneratorService sequenceGeneratorService;
 
-
-    // <<< CONSTRUCTOR UPDATED
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager) {
+    public AuthService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService,
+                       AuthenticationManager authenticationManager,
+                       SequenceGeneratorService sequenceGeneratorService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.sequenceGeneratorService = sequenceGeneratorService;
     }
 
     public AuthResponse register(RegisterRequest request) {
         User user = new User();
+        user.setId(sequenceGeneratorService.getNextSequence(USER_SEQUENCE));
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
         user.setEmail(request.email());
@@ -40,7 +48,6 @@ public class AuthService {
 
         userRepository.save(user);
 
-        // <<< CHANGED: Create UserDetails on the fly
         UserDetails userDetails = new org.springframework.security.core.userdetails.User(
                 request.email(),
                 user.getPassword(),
@@ -59,7 +66,6 @@ public class AuthService {
                 )
         );
 
-        // <<< CHANGED: Fetch the user from the repository to create UserDetails
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password."));
 

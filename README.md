@@ -1,37 +1,40 @@
 # Expense Tracker
 
-A Spring Boot + MySQL personal finance tracker with a vanilla JavaScript frontend. The app issues JWTs for authentication and serves the UI from the same backend, making it easy to deploy as a single service.
+A Spring Boot + MongoDB personal finance tracker with a vanilla JavaScript frontend. The app issues JWTs for authentication and serves the UI from the same backend, making it easy to deploy as a single service.
 
 ## Prerequisites
 
 - Java 21 or newer (Railway default images include Temurin 21)
 - Maven Wrapper (`mvnw`/`mvnw.cmd`) already shipped with the repo
-- MySQL 8.x (local dev) or a managed MySQL instance (Railway plugin)
+- MongoDB 6.x+ (local dev via Docker/Homebrew/Chocolatey) or a hosted Atlas cluster
 
 ## Configuration
 
-All sensitive settings are injected through environment variables. The table below shows the variables you need to provide.
+All sensitive settings are injected through environment variables. Minimum set:
 
 | Variable | Purpose | Example (local) |
 | --- | --- | --- |
-| `SPRING_DATASOURCE_URL` | JDBC connection string | `jdbc:mysql://localhost:3306/expense_tracker_db` |
-| `SPRING_DATASOURCE_USERNAME` | DB username | `root` |
-| `SPRING_DATASOURCE_PASSWORD` | DB password | `my-strong-password` |
+| `SPRING_DATA_MONGODB_URI` | Mongo connection string | `mongodb://localhost:27017/expense_tracker` |
+| `SPRING_DATA_MONGODB_DATABASE` | Optional database override | `expense_tracker` |
 | `JWT_SECRET_KEY` | Signing key for JWT tokens | `super-secret-change-me` |
-| `SPRING_DATA_MONGODB_URI` | Optional Mongo URI (remove if unused) | *(leave empty if not used)* |
-| `SPRING_DATA_MONGODB_DATABASE` | Optional Mongo database name | *(leave empty if not used)* |
+| `SERVER_PORT` | Optional override for the backend HTTP port | `8090` |
+| `PORT` | (Railway/Heroku) Port to bind to | `8090` |
 
 > **Tip:** create a `.env` (not committed) or use the Railway secrets UI to manage these values.
 
 ## Run locally
 
-1. Make sure MySQL is running and the schema from `SPRING_DATASOURCE_URL` exists.
+1. Make sure MongoDB is running. Example with Docker Desktop:
+
+```powershell
+docker run -d --name mongo-expense -p 27017:27017 mongo:7
+```
+
 2. Export the environment variables (example for PowerShell):
 
 ```powershell
-$Env:SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:3306/expense_tracker_db"
-$Env:SPRING_DATASOURCE_USERNAME = "root"
-$Env:SPRING_DATASOURCE_PASSWORD = "my-strong-password"
+$Env:SPRING_DATA_MONGODB_URI = "mongodb://localhost:27017/expense_tracker"
+$Env:SPRING_DATA_MONGODB_DATABASE = "expense_tracker"
 $Env:JWT_SECRET_KEY = "super-secret-change-me"
 ```
 
@@ -41,7 +44,9 @@ $Env:JWT_SECRET_KEY = "super-secret-change-me"
 .\mvnw.cmd spring-boot:run
 ```
 
-4. Open http://localhost:8080 to use the UI.
+4. Open http://localhost:8090 to use the UI.
+
+> **Frontend on another port?** If you serve `index.html` from a different dev server (for example VS Code Live Server on port 5500), set `window.EXPENSE_TRACKER_API_BASE = "http://localhost:8090";` in the browser console **or** add `<meta name="expense-tracker-backend" content="http://localhost:8090">` to your HTML so the JavaScript knows which backend origin to call.
 
 To package the application without running tests:
 
@@ -80,19 +85,16 @@ git push -u origin main
    - **Build command:** `./mvnw -DskipTests package`
    - **Start command:** `java -Dserver.port=$PORT -jar target/expensetracker-0.0.1-SNAPSHOT.jar`
 
-3. **Add a MySQL database** via Railway ➜ *Add Plugin* ➜ *MySQL*. Note the auto-generated variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`). Wire them into Spring Boot secrets:
+3. Railway does not ship a Mongo plugin. Create an Atlas cluster (or another hosted Mongo) and copy its SRV connection string. In Railway ➜ *Variables*, set:
 
 ```bash
-# Railway variables (set in the service ➜ Variables tab)
-SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQLHOST}:${MYSQLPORT}/${MYSQLDATABASE}
-SPRING_DATASOURCE_USERNAME=${MYSQLUSER}
-SPRING_DATASOURCE_PASSWORD=${MYSQLPASSWORD}
+SPRING_DATA_MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/expense_tracker
+SPRING_DATA_MONGODB_DATABASE=expense_tracker
 JWT_SECRET_KEY=generate-a-long-random-string
 ```
 
-4. If you do not use MongoDB, delete `SPRING_DATA_MONGODB_URI` and `SPRING_DATA_MONGODB_DATABASE` from the Railway service to avoid blank values. Otherwise, provide the Mongo connection secrets.
-5. Trigger a redeploy. Railway builds the JAR, runs it on the injected `$PORT`, and exposes the public URL.
-6. Update any CORS whitelists (if applicable) with the Railway domain. The frontend served by Spring Boot will already use the same origin, so no extra work is required.
+4. Trigger a redeploy. Railway builds the JAR, runs it on the injected `$PORT`, and exposes the public URL.
+5. Update any CORS whitelists (if applicable) with the Railway domain. The frontend served by Spring Boot already uses the same origin, so no extra work is required.
 
 ## Post-deployment checklist
 
@@ -101,3 +103,24 @@ JWT_SECRET_KEY=generate-a-long-random-string
 - Monitor the Railway dashboard for build logs, metrics, and free credit consumption.
 
 Happy tracking! 🚀
+
+## Deploy to Render
+
+Render is another managed option that can run the Spring Boot JAR without Docker. You can either click **New ➜ Web Service ➜ Build & Deploy from GitHub** or use the optional `render.yaml` in this repo.
+
+1. **Repository:** Select this project and give the service a name (for example `expense-tracker`).
+2. **Environment:** `Java`. Render detects the Maven wrapper automatically.
+3. **Build command:** `./mvnw -DskipTests package`
+4. **Start command:** `java -Dserver.port=$PORT -jar target/expensetracker-0.0.1-SNAPSHOT.jar`
+5. **Environment variables:**
+
+   | Key | Value |
+   | --- | --- |
+   | `SPRING_DATA_MONGODB_URI` | Your Atlas SRV URI (`mongodb+srv://...`) |
+   | `SPRING_DATA_MONGODB_DATABASE` | `expense_tracker` |
+   | `JWT_SECRET_KEY` | A long random string |
+
+6. Save the service. Render will build the JAR and run it on the platform-assigned `$PORT`, which our app now detects automatically.
+7. Open the generated `https://<service-name>.onrender.com` URL, register a user, and confirm expense CRUD works end-to-end.
+
+> **Tip:** Keep MongoDB credentials in Render's *Environment* tab (they're encrypted at rest). If you rotate Atlas passwords later, redeploy the service.

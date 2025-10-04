@@ -34,6 +34,15 @@ class ExpenseTrackerApp {
 
     _buildApiBaseList() {
         const bases = [];
+        const configuredBase = window.EXPENSE_TRACKER_API_BASE || document.querySelector('meta[name="expense-tracker-backend"]')?.content;
+        if (configuredBase) {
+            try {
+                const normalized = new URL(configuredBase);
+                bases.push(normalized.origin);
+            } catch (error) {
+                console.warn('[ExpenseTracker] Invalid configured backend origin:', configuredBase, error);
+            }
+        }
         const origin = window.location.origin;
 
         if (origin && origin.startsWith('http')) {
@@ -42,6 +51,8 @@ class ExpenseTrackerApp {
                 const url = new URL(origin);
                 const hostname = url.hostname;
                 const protocol = url.protocol;
+                bases.push(`${protocol}//${hostname}:8090`);
+                bases.push(`${protocol}//${hostname}:8082`);
                 bases.push(`${protocol}//${hostname}:8081`);
                 bases.push(`${protocol}//${hostname}:8080`);
             } catch (error) {
@@ -49,6 +60,10 @@ class ExpenseTrackerApp {
             }
         }
 
+        bases.push('http://localhost:8090');
+        bases.push('http://127.0.0.1:8090');
+        bases.push('http://localhost:8082');
+        bases.push('http://127.0.0.1:8082');
         bases.push('http://localhost:8081');
         bases.push('http://127.0.0.1:8081');
         bases.push('http://localhost:8080');
@@ -219,7 +234,7 @@ class ExpenseTrackerApp {
             }
         }
 
-        const fallbackError = lastNetworkError || new Error('Unable to reach the backend API. Please confirm it is running on port 8081.');
+        const fallbackError = lastNetworkError || new Error('Unable to reach the backend API. Please confirm it is running on port 8090 (or update EXPENSE_TRACKER_API_BASE).');
         console.error('[ExpenseTracker] All API base URLs failed. Is the Spring Boot server running?', fallbackError);
         this._displayMessage(this.errorMessage, fallbackError.message);
         throw fallbackError;

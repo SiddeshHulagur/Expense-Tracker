@@ -1,12 +1,14 @@
 package com.siddesh.expensetracker.repository;
 
-import com.siddesh.expensetracker.entity.User;
-import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+import org.springframework.data.mongodb.repository.MongoRepository;
 
-    // Spring Data JPA will automatically create a query for this method
+import com.siddesh.expensetracker.entity.User;
+
+public interface UserRepository extends MongoRepository<User, Long> {
+
+    // Spring Data MongoDB will automatically derive the query for this method
     // based on the method name. It will look for a user by their email.
     Optional<User> findByEmail(String email);
 }
