@@ -10,5 +10,7 @@ public interface UserRepository extends MongoRepository<User, Long> {
 
     // Spring Data MongoDB will automatically derive the query for this method
     // based on the method name. It will look for a user by their email.
-    Optional<User> findByEmail(String email);
+    Optional<User> findFirstByEmail(String email);
+
+    boolean existsByEmail(String email);
 }

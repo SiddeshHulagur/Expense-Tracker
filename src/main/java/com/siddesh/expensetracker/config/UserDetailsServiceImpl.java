@@ -1,13 +1,14 @@
 package com.siddesh.expensetracker.config;
 
-import com.siddesh.expensetracker.repository.UserRepository;
+import java.util.Collections;
+
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
+import com.siddesh.expensetracker.repository.UserRepository;
 
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
@@ -21,7 +22,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         // We are using email as the username
-        return userRepository.findByEmail(email)
+    return userRepository.findFirstByEmail(email)
                 .map(user -> new User(
                         user.getEmail(),
                         user.getPassword(),

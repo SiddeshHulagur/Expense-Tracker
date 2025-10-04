@@ -39,6 +39,10 @@ public class AuthService {
     }
 
     public AuthResponse register(RegisterRequest request) {
+                if (userRepository.existsByEmail(request.email())) {
+                        throw new IllegalArgumentException("Email is already registered.");
+                }
+
         User user = new User();
         user.setId(sequenceGeneratorService.getNextSequence(USER_SEQUENCE));
         user.setFirstName(request.firstName());
@@ -66,7 +70,7 @@ public class AuthService {
                 )
         );
 
-        User user = userRepository.findByEmail(request.email())
+        User user = userRepository.findFirstByEmail(request.email())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password."));
 
         UserDetails userDetails = new org.springframework.security.core.userdetails.User(
