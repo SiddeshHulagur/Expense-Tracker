@@ -26,7 +26,7 @@ public class ExpenseController {
 
     // Helper method to get the current user's ID
     private Long getCurrentUserId(UserDetails userDetails) {
-        return userRepository.findByEmail(userDetails.getUsername())
+    return userRepository.findFirstByEmail(userDetails.getUsername())
                 .map(User::getId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
